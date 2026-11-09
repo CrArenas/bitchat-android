@@ -473,6 +473,14 @@ fun ChatScreen(viewModel: ChatViewModel) {
             }
         )
 
+        // SARD: botón para reportar una emergencia
+        com.bitchat.android.sard.SardBoton(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = ChatHeaderHeight + 8.dp, end = 12.dp)
+        )
+
         // Scroll-to-bottom floating button
         AnimatedVisibility(
             visible = isScrolledUp,

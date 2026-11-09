@@ -67,6 +67,11 @@ class MeshDelegateHandler(
                 }
             }
             
+            // SARD: reportes y acuses viajan como mensajes públicos de la malla
+            if (!message.isPrivate && message.channel == null) {
+                com.bitchat.android.sard.Sard.alRecibir(message.content)
+            }
+
             // Trigger haptic feedback
             onHapticFeedback()
 
