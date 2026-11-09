@@ -101,7 +101,11 @@ object Sard {
             subida.withLock {
                 val url = _urlCentral.value
                 val pendientes = almacen.reportes.value.filter { it.estado != Estado.ENTREGADO && !it.rechazado }
-                if (url.isBlank() || pendientes.isEmpty()) return@withLock
+                if (url.isBlank()) {
+                    _ultimoError.value = "Falta la URL de la central: escríbela y toca Guardar URL."
+                    return@withLock
+                }
+                if (pendientes.isEmpty()) return@withLock
                 try {
                     val resp = pasarela.subir(url, pendientes.map { it.mensaje }, pasarelaId = dispositivo())
                     for (id in resp.sack) {
