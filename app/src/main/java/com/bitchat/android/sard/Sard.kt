@@ -41,8 +41,12 @@ object Sard {
 
     private val _pasarelaActiva = MutableStateFlow(false)
     val pasarelaActiva: StateFlow<Boolean> = _pasarelaActiva
-    private val _urlCentral = MutableStateFlow("")
-    val urlCentral: StateFlow<String> = _urlCentral
+    private val _urlA = MutableStateFlow("")
+    val urlA: StateFlow<String> = _urlA
+    private val _urlB = MutableStateFlow("")
+    val urlB: StateFlow<String> = _urlB
+    private val _centralUsada = MutableStateFlow<String?>(null) // "A" o "B": a cuál subió la última vez
+    val centralUsada: StateFlow<String?> = _centralUsada
     private val _ultimoError = MutableStateFlow<String?>(null)
     val ultimoError: StateFlow<String?> = _ultimoError
 
@@ -56,7 +60,8 @@ object Sard {
         almacen = Almacen(File(app.filesDir, "sard/reportes.json"))
         palabrasCriticas = Prioridad.leerLista(app.assets.open("palabras-criticas.txt").bufferedReader().readText())
         _pasarelaActiva.value = prefs.getBoolean("pasarela", false)
-        _urlCentral.value = prefs.getString("url_central", "") ?: ""
+        _urlA.value = prefs.getString("url_a", "") ?: ""
+        _urlB.value = prefs.getString("url_b", "") ?: ""
         scope.launch {
             while (true) {
                 runCatching { revisarCola() }.onFailure { Log.w(TAG, "Fallo en la cola", it) }
@@ -106,10 +111,12 @@ object Sard {
         }
     }
 
-    fun configurarPasarela(activa: Boolean, url: String) {
-        prefs.edit().putBoolean("pasarela", activa).putString("url_central", url.trim()).apply()
+    fun configurarPasarela(activa: Boolean, urlA: String, urlB: String) {
+        prefs.edit().putBoolean("pasarela", activa)
+            .putString("url_a", urlA.trim()).putString("url_b", urlB.trim()).apply()
         _pasarelaActiva.value = activa
-        _urlCentral.value = url.trim()
+        _urlA.value = urlA.trim()
+        _urlB.value = urlB.trim()
         if (activa) subirPendientes()
     }
 
@@ -158,27 +165,28 @@ object Sard {
     fun subirPendientes() {
         scope.launch {
             subida.withLock {
-                val url = _urlCentral.value
+                val a = _urlA.value
+                val b = _urlB.value
                 val pendientes = almacen.reportes.value.filter { it.estado != Estado.ENTREGADO && !it.rechazado }
-                if (url.isBlank()) {
-                    _ultimoError.value = "Falta la URL de la central: escríbela y toca Guardar URL."
+                if (a.isBlank() && b.isBlank()) {
+                    _ultimoError.value = "Falta la URL de la central: escríbela y toca Guardar."
                     return@withLock
                 }
                 if (pendientes.isEmpty()) return@withLock
-                try {
-                    val resp = pasarela.subir(url, pendientes.map { it.mensaje }, pasarelaId = dispositivo())
-                    for (id in resp.sack) {
-                        almacen.actualizar(id) { it.copy(estado = Estado.ENTREGADO) }
-                        enviar(Sard1.sack(id))
-                    }
-                    for (m in resp.rechazados) {
-                        pendientes.find { it.mensaje == m }?.let { g -> almacen.actualizar(g.id) { it.copy(rechazado = true) } }
-                    }
-                    _ultimoError.value = null
-                } catch (e: Exception) {
-                    Log.w(TAG, "No se pudo subir a la central", e)
-                    _ultimoError.value = "Sin conexión con la central: ${e.message}"
+                val (nombre, resp, fallos) = pasarela.subirConFailover(a, b, pendientes.map { it.mensaje }, dispositivo())
+                if (resp == null) {
+                    _ultimoError.value = "Ninguna central recibió los reportes (${fallos.joinToString("; ")}). Se reintenta."
+                    return@withLock
                 }
+                for (id in resp.sack) {
+                    almacen.actualizar(id) { it.copy(estado = Estado.ENTREGADO) }
+                    enviar(Sard1.sack(id))
+                }
+                for (m in resp.rechazados) {
+                    pendientes.find { it.mensaje == m }?.let { g -> almacen.actualizar(g.id) { it.copy(rechazado = true) } }
+                }
+                _centralUsada.value = nombre
+                _ultimoError.value = null
             }
         }
     }
