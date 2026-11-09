@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -127,14 +128,16 @@ private fun Formulario() {
     Button(
         onClick = {
             val r = Sard.crear(tipo, personas, atrapados, heridos, vulnerables, texto)
-            enviado = "Enviado ${r.id} (${r.prioridad}). Se reenvía por la malla hasta llegar a la central."
+            val m = r.mensaje()
+            enviado = "Enviado ${r.id} (${r.prioridad}), ${m.toByteArray().size} bytes:\n$m\n" +
+                "Queda pendiente y se reenvía por la malla hasta llegar a la central."
             texto = ""; atrapados = false; heridos = false; vulnerables = false; personas = 1; tipo = "OTRO"
         },
         modifier = Modifier.fillMaxWidth(),
         colors = ButtonDefaults.buttonColors(containerColor = ROJO, contentColor = Color.White),
     ) { Text("Enviar reporte") }
 
-    enviado?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    enviado?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
 }
 
 @Composable
