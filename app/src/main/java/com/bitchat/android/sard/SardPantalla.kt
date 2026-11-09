@@ -165,30 +165,40 @@ private fun MisReportes() {
 @Composable
 private fun AjustePasarela() {
     val activa by Sard.pasarelaActiva.collectAsStateWithLifecycle()
-    val urlGuardada by Sard.urlCentral.collectAsStateWithLifecycle()
+    val urlGuardadaA by Sard.urlA.collectAsStateWithLifecycle()
+    val urlGuardadaB by Sard.urlB.collectAsStateWithLifecycle()
+    val centralUsada by Sard.centralUsada.collectAsStateWithLifecycle()
     val error by Sard.ultimoError.collectAsStateWithLifecycle()
     val reportes by Sard.reportes.collectAsStateWithLifecycle()
-    var url by remember(urlGuardada) { mutableStateOf(urlGuardada) }
+    var urlA by remember(urlGuardadaA) { mutableStateOf(urlGuardadaA) }
+    var urlB by remember(urlGuardadaB) { mutableStateOf(urlGuardadaB) }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("Modo pasarela", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("Solo en el celular con internet: sube los reportes a la central.", style = MaterialTheme.typography.bodySmall)
         }
-        Switch(checked = activa, onCheckedChange = { Sard.configurarPasarela(it, url) })
+        Switch(checked = activa, onCheckedChange = { Sard.configurarPasarela(it, urlA, urlB) })
     }
-    OutlinedTextField(
-        value = url,
-        onValueChange = { url = it },
-        label = { Text("URL de la central (ej. http://192.168.1.10:8001)") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-    )
-    OutlinedButton(onClick = { Sard.configurarPasarela(activa, url) }) { Text("Guardar URL") }
+    CampoUrl("Central A (ej. http://192.168.1.10:8001)", urlA) { urlA = it }
+    CampoUrl("Central B, respaldo (ej. http://192.168.1.10:8002)", urlB) { urlB = it }
+    OutlinedButton(onClick = { Sard.configurarPasarela(activa, urlA, urlB) }) { Text("Guardar") }
+    centralUsada?.let { Text("Última subida: central $it", style = MaterialTheme.typography.bodySmall) }
 
     val ajenos = reportes.count { !it.propio }
     val entregados = reportes.count { it.estado == Estado.ENTREGADO }
     Text("Reportes en este celular: ${reportes.size} ($ajenos de otros) · entregados: $entregados", style = MaterialTheme.typography.bodySmall)
     error?.let { Text(it, color = ROJO, style = MaterialTheme.typography.bodySmall) }
+}
+
+@Composable
+private fun CampoUrl(etiqueta: String, valor: String, alCambiar: (String) -> Unit) {
+    OutlinedTextField(
+        value = valor,
+        onValueChange = alCambiar,
+        label = { Text(etiqueta) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+    )
 }

@@ -15,6 +15,16 @@ class Pasarela(private val http: OkHttpClient = OkHttpClient.Builder().callTimeo
 
     data class Respuesta(val sack: List<String>, val rechazados: List<String>)
 
+    private val httpSalud = http.newBuilder().callTimeout(3, TimeUnit.SECONDS).build()
+
+    /** true si la central responde `GET /salud` con `estado: ok` en menos de 3 s. */
+    fun salud(urlCentral: String): Boolean = runCatching {
+        val req = Request.Builder().url(urlCentral.trimEnd('/') + "/salud").get().build()
+        httpSalud.newCall(req).execute().use { r ->
+            r.isSuccessful && gson.fromJson(r.body.string(), JsonObject::class.java)?.get("estado")?.asString == "ok"
+        }
+    }.getOrDefault(false)
+
     /** Sube los mensajes y devuelve los ids confirmados y los mensajes rechazados. */
     @Throws(IOException::class)
     fun subir(urlCentral: String, mensajes: List<String>, pasarelaId: String): Respuesta {
@@ -31,5 +41,29 @@ class Pasarela(private val http: OkHttpClient = OkHttpClient.Builder().callTimeo
                 ?.mapNotNull { it.asJsonObject.get("mensaje")?.asString } ?: emptyList()
             return Respuesta(sack, rechazados)
         }
+    }
+
+    /** A qué central se subió ("A" o "B"), su respuesta, y los fallos de las que no recibieron. */
+    data class Resultado(val central: String?, val respuesta: Respuesta?, val fallos: List<String>)
+
+    /**
+     * Failover (contrato, "Sincronización"): consulta `GET /salud` de la A y, si no responde, sube
+     * a la B. Si la A responde pero falla al recibir, también prueba la B.
+     */
+    fun subirConFailover(urlA: String, urlB: String, mensajes: List<String>, pasarelaId: String): Resultado {
+        val fallos = mutableListOf<String>()
+        val destinos = mutableListOf<Pair<String, String>>()
+        if (urlA.isNotBlank()) {
+            if (salud(urlA)) destinos += "A" to urlA else fallos += "A: no responde a /salud"
+        }
+        if (urlB.isNotBlank()) destinos += "B" to urlB
+        for ((nombre, url) in destinos) {
+            try {
+                return Resultado(nombre, subir(url, mensajes, pasarelaId), fallos)
+            } catch (e: Exception) { // red, HTTP o respuesta ilegible: se prueba la siguiente
+                fallos += "$nombre: ${e.message}"
+            }
+        }
+        return Resultado(null, null, fallos)
     }
 }
