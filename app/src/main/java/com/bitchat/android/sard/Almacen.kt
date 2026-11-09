@@ -16,6 +16,9 @@ data class Guardado(
     val estado: Estado,
     val recibidoMs: Long,
     val rechazado: Boolean = false, // la central lo rechazó por mal formado (regla 6): no se resube
+    val intentos: Int = 0, // envíos a la malla en la ronda actual
+    val proximoMs: Long = 0, // cuándo toca el siguiente envío
+    val inicioRondaMs: Long = 0, // 0: la primera ronda, que empieza en la hora_unix del reporte
 )
 
 /**
@@ -43,6 +46,14 @@ class Almacen(private val archivo: File) {
         if (nuevo == actual) return false
         guardar(nuevo)
         return true
+    }
+
+    /** Aplica [cambio] a todos los reportes en una sola escritura. */
+    @Synchronized
+    fun actualizarTodos(cambio: (Guardado) -> Guardado) {
+        val actual = _reportes.value
+        val nuevo = actual.map(cambio)
+        if (nuevo != actual) guardar(nuevo)
     }
 
     private fun guardar(lista: List<Guardado>) {

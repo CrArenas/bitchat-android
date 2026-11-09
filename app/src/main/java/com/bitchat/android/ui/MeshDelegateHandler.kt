@@ -68,8 +68,9 @@ class MeshDelegateHandler(
             }
             
             // SARD: reportes y acuses viajan como mensajes públicos de la malla
-            if (!message.isPrivate && message.channel == null) {
-                com.bitchat.android.sard.Sard.alRecibir(message.content)
+            if (!message.isPrivate && message.channel == null &&
+                com.bitchat.android.sard.Sard.alRecibir(message.content)) {
+                return@launch // los mensajes SARD no se muestran en el chat
             }
 
             // Trigger haptic feedback
@@ -133,6 +134,7 @@ class MeshDelegateHandler(
     
     override fun didUpdatePeerList(peers: List<String>) {
         peerUpdates.trySend(peers.distinct())
+        com.bitchat.android.sard.Sard.alCambiarVecinos(peers)
     }
 
     private suspend fun processPeerUpdate(mergedPeers: List<String>) {
