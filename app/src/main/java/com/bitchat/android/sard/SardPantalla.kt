@@ -182,7 +182,11 @@ private fun AjustePasarela() {
     }
     CampoUrl("Central A (ej. http://192.168.1.10:8001)", urlA) { urlA = it }
     CampoUrl("Central B, respaldo (ej. http://192.168.1.10:8002)", urlB) { urlB = it }
-    OutlinedButton(onClick = { Sard.configurarPasarela(activa, urlA, urlB) }) { Text("Guardar") }
+    var guardado by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = { Sard.configurarPasarela(activa, urlA, urlB); guardado = true }) { Text("Guardar") }
+        if (guardado && urlA == urlGuardadaA && urlB == urlGuardadaB) Text("Guardado ✓", style = MaterialTheme.typography.bodySmall)
+    }
     centralUsada?.let { Text("Última subida: central $it", style = MaterialTheme.typography.bodySmall) }
 
     val ajenos = reportes.count { !it.propio }

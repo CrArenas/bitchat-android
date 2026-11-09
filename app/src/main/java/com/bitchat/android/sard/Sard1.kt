@@ -51,6 +51,9 @@ object Sard1 {
 
     fun sack(id: String) = "SACK|$id"
 
+    /** true si es un mensaje del protocolo SARD (reporte o acuse), válido o no. */
+    fun esMensajeSard(mensaje: String) = mensaje.startsWith("SARD1|") || mensaje.startsWith("SACK|")
+
     /** El id confirmado si el mensaje es un `SACK|<id>`; null en otro caso. */
     fun leerSack(mensaje: String): String? =
         mensaje.removePrefix("SACK|").takeIf { mensaje.startsWith("SACK|") && RE_ID.matches(it) }

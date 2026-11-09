@@ -26,6 +26,10 @@ internal object IncomingMessageAdmission {
                 }
             }
 
+            // SARD: los reportes se reenvían idénticos hasta el SACK; el filtro de spam los
+            // escondería. Pasan a la app sin filtro y sin fila en el chat.
+            message.channel == null && com.bitchat.android.sard.Sard1.esMensajeSard(message.content) -> true
+
             isHiddenAsSpam(message) -> false
 
             message.channel != null -> {
