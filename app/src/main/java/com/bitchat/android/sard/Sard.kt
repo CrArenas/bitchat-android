@@ -11,6 +11,7 @@ import com.bitchat.android.geohash.Geohash
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -56,6 +57,53 @@ object Sard {
         palabrasCriticas = Prioridad.leerLista(app.assets.open("palabras-criticas.txt").bufferedReader().readText())
         _pasarelaActiva.value = prefs.getBoolean("pasarela", false)
         _urlCentral.value = prefs.getString("url_central", "") ?: ""
+        scope.launch {
+            while (true) {
+                runCatching { revisarCola() }.onFailure { Log.w(TAG, "Fallo en la cola", it) }
+                delay(1000)
+            }
+        }
+    }
+
+    private fun ahora() = System.currentTimeMillis()
+
+    private fun siguienteEnvio(intentos: Int) = ahora() + Cola.esperaMs(intentos, Random.nextDouble())
+
+    /**
+     * Cada segundo: marca "no entregado" lo vencido y reenvía a la malla, en orden de prioridad,
+     * los pendientes cuyo próximo intento ya llegó. La pasarela, además, reintenta la subida.
+     */
+    private fun revisarCola() {
+        val t = ahora()
+        almacen.actualizarTodos { g ->
+            val r = Sard1.leer(g.mensaje)
+            if (g.estado == Estado.PENDIENTE && r != null && Cola.vencido(g, r, t)) g.copy(estado = Estado.NO_ENTREGADO) else g
+        }
+        val debidos = Cola.debidos(almacen.reportes.value, t)
+        for ((g, _) in debidos) {
+            enviar(g.mensaje)
+            almacen.actualizar(g.id) { it.copy(intentos = it.intentos + 1, proximoMs = siguienteEnvio(it.intentos + 1)) }
+        }
+        if (debidos.isNotEmpty() && _pasarelaActiva.value) subirPendientes()
+    }
+
+    private var vecinos: Set<String> = emptySet()
+
+    /**
+     * Lo llama bitchat cuando cambia la lista de vecinos. Si aparece uno nuevo, los reportes
+     * vencidos empiezan una ronda nueva: se envían ya y la espera vuelve a 2 s (regla 5).
+     */
+    fun alCambiarVecinos(peers: List<String>) {
+        if (!::almacen.isInitialized) return
+        val nuevos = peers.toSet() - vecinos
+        vecinos = peers.toSet()
+        if (nuevos.isEmpty()) return
+        val t = ahora()
+        almacen.actualizarTodos { g ->
+            if (g.estado == Estado.NO_ENTREGADO && !g.rechazado)
+                g.copy(estado = Estado.PENDIENTE, intentos = 0, proximoMs = t, inicioRondaMs = t)
+            else g
+        }
     }
 
     fun configurarPasarela(activa: Boolean, url: String) {
@@ -77,22 +125,33 @@ object Sard {
             vulnerables = vulnerables, geohash = geohash(), horaUnix = System.currentTimeMillis() / 1000,
             texto = limpio,
         )
-        almacen.agregar(Guardado(r.id, r.mensaje(), propio = true, Estado.PENDIENTE, System.currentTimeMillis()))
+        almacen.agregar(Guardado(r.id, r.mensaje(), propio = true, Estado.PENDIENTE, ahora(), intentos = 1, proximoMs = siguienteEnvio(1)))
         enviar(r.mensaje())
         if (_pasarelaActiva.value) subirPendientes()
         return r
     }
 
-    /** Lo llama bitchat por cada mensaje público que llega de la malla. */
-    fun alRecibir(contenido: String) {
-        if (!::almacen.isInitialized) return
+    /**
+     * Lo llama bitchat por cada mensaje público que llega de la malla. Devuelve true si era un
+     * mensaje SARD (`SARD1` o `SACK`), que no se muestra en el chat.
+     */
+    fun alRecibir(contenido: String): Boolean {
+        if (!::almacen.isInitialized) return false
         Sard1.leerSack(contenido)?.let { id ->
             almacen.actualizar(id) { it.copy(estado = Estado.ENTREGADO) }
-            return
+            return true
         }
-        val r = Sard1.leer(contenido) ?: return
-        almacen.agregar(Guardado(r.id, contenido, propio = false, Estado.PENDIENTE, System.currentTimeMillis()))
-        if (_pasarelaActiva.value) subirPendientes()
+        val r = Sard1.leer(contenido) ?: return contenido.startsWith("SARD1|")
+        val nuevo = almacen.agregar(
+            Guardado(r.id, contenido, propio = false, Estado.PENDIENTE, ahora(), intentos = 1, proximoMs = siguienteEnvio(1))
+        )
+        if (!nuevo && almacen.reportes.value.any { it.id == r.id && it.estado == Estado.ENTREGADO }) {
+            // Quien lo reenvía no supo del SACK: se le repite.
+            enviar(Sard1.sack(r.id))
+        } else if (nuevo && _pasarelaActiva.value) {
+            subirPendientes()
+        }
+        return true
     }
 
     /** Pasarela: sube todo lo pendiente a la central y devuelve los SACK a la malla. */

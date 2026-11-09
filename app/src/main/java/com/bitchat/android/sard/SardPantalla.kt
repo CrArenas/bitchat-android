@@ -155,7 +155,7 @@ private fun MisReportes() {
         val r = Sard1.leer(g.mensaje)
         val estado = when (g.estado) {
             Estado.ENTREGADO -> "✓ entregado"
-            Estado.PENDIENTE -> "pendiente"
+            Estado.PENDIENTE -> "pendiente · intento ${g.intentos}"
             Estado.NO_ENTREGADO -> "no entregado"
         }
         Text("${g.id} · ${r?.prioridad} · ${NOMBRE_TIPO[r?.tipo] ?: r?.tipo} · $estado")
