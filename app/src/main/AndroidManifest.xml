@@ -85,6 +85,7 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.BitchatAndroid"
+        android:usesCleartextTraffic="true"
         tools:targetApi="33">
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"

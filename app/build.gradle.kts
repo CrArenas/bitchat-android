@@ -26,6 +26,15 @@ require(
     "BITCHAT_GITHUB_RELEASE_CERT_SHA256 must be a SHA-256 certificate fingerprint"
 }
 
+val sardAssets = layout.buildDirectory.dir("generated/sard-assets")
+val copiarPalabrasCriticas by tasks.registering(Sync::class) {
+    val origen = rootProject.file("../../contracts/palabras-criticas.txt")
+    doFirst { check(origen.exists()) { "Falta $origen: compilar desde el repo sard-expoasi" } }
+    from(origen)
+    into(sardAssets)
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(copiarPalabrasCriticas) }
+
 android {
     namespace = "com.bitchat.android"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -62,6 +71,10 @@ android {
         // Disables dependency metadata when building Android App Bundles.
         includeInBundle = false
     }
+
+    // SARD: la lista de palabras críticas sale del contrato del repo sard-expoasi, que contiene
+    // este fork como submódulo en app/bitchat-android.
+    sourceSets.getByName("main").assets.directories.add(sardAssets.get().asFile.path)
 
     if (composerUiTests) {
         sourceSets.getByName("androidTest").kotlin.directories.add("src/composerAndroidTest/java")

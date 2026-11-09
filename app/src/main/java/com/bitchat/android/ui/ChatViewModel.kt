@@ -428,6 +428,7 @@ class ChatViewModel(
         // Note: Mesh service delegate is now set by MainActivity
         loadAndInitialize()
         ContactDirectory.initialize(getApplication()) { mesh }
+        com.bitchat.android.sard.Sard.iniciar(getApplication()) { mesh.sendMessage(it) }
         com.bitchat.android.services.AppStateStore.canonicalizePrivateChats()
         observeConversationDisplayNames()
         // Application startup performs the initial restore. Repeat it for every new UI owner
